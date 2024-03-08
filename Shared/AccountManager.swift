@@ -18,8 +18,15 @@ class AccountManager: NSObject, ASAuthorizationControllerPresentationContextProv
     let domain = "example.com"
     var authenticationAnchor: ASPresentationAnchor?
     var isPerformingModalReqest = false
+    
+    // https://forums.developer.apple.com/forums/thread/713522
+    // 明示的にアカウント作成する場合は、performAutoFillAssistedRequestsのcontrollerをcancelする必要がありそう
+    var autofillController: ASAuthorizationController?
+    let logger = Logger()
 
     func signInWith(anchor: ASPresentationAnchor, preferImmediatelyAvailableCredentials: Bool) {
+        logger.log(#function)
+        autofillController?.cancel()
         self.authenticationAnchor = anchor
         let publicKeyCredentialProvider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: domain)
 
@@ -54,6 +61,7 @@ class AccountManager: NSObject, ASAuthorizationControllerPresentationContextProv
     }
 
     func beginAutoFillAssistedPasskeySignIn(anchor: ASPresentationAnchor) {
+        logger.log(#function)
         self.authenticationAnchor = anchor
 
         let publicKeyCredentialProvider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: domain)
@@ -66,10 +74,15 @@ class AccountManager: NSObject, ASAuthorizationControllerPresentationContextProv
         let authController = ASAuthorizationController(authorizationRequests: [ assertionRequest ] )
         authController.delegate = self
         authController.presentationContextProvider = self
+        autofillController = authController
         authController.performAutoFillAssistedRequests()
     }
     
     func signUpWith(userName: String, anchor: ASPresentationAnchor) {
+        logger.log(#function)
+        // 明示的にアカウント作成する場合は、performAutoFillAssistedRequestsのcontrollerをcancelする必要がありそう
+        autofillController?.cancel()
+        
         self.authenticationAnchor = anchor
         let publicKeyCredentialProvider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: domain)
 
@@ -91,7 +104,7 @@ class AccountManager: NSObject, ASAuthorizationControllerPresentationContextProv
     }
     
     func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
-        let logger = Logger()
+        logger.log(#function)
         switch authorization.credential {
         case let credentialRegistration as ASAuthorizationPlatformPublicKeyCredentialRegistration:
             logger.log("A new passkey was registered: \(credentialRegistration)")
@@ -127,7 +140,7 @@ class AccountManager: NSObject, ASAuthorizationControllerPresentationContextProv
     }
 
     func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
-        let logger = Logger()
+        logger.log(#function)
         guard let authorizationError = error as? ASAuthorizationError else {
             isPerformingModalReqest = false
             logger.error("Unexpected authorization error: \(error.localizedDescription)")
@@ -152,14 +165,17 @@ class AccountManager: NSObject, ASAuthorizationControllerPresentationContextProv
     }
 
     func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        logger.log(#function)
         return authenticationAnchor!
     }
 
     func didFinishSignIn() {
+        logger.log(#function)
         NotificationCenter.default.post(name: .UserSignedIn, object: nil)
     }
 
     func didCancelModalSheet() {
+        logger.log(#function)
         NotificationCenter.default.post(name: .ModalSignInSheetCanceled, object: nil)
     }
 }
